@@ -16,11 +16,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 # ##### 2. 획요소 특징 벡터 파일 로드
 
-bbichim_df = pd.read_csv('형태소별 특징벡터(.csv)/bbichim_feature_vector(all).csv').drop(['fontname'], axis=1)
-buri_df = pd.read_csv('형태소별 특징벡터(.csv)/buri_feature_vector(all).csv').drop(['fontname'], axis=1)
-kkeokim_df = pd.read_csv('형태소별 특징벡터(.csv)/kkeokim_feature_vector(all).csv').drop(['fontname'], axis=1)
-kkokjijum_df = pd.read_csv('형태소별 특징벡터(.csv)/kkokjijum_feature_vector(all).csv').drop(['fontname'], axis=1)
-sangtu_df = pd.read_csv('형태소별 특징벡터(.csv)/sangtu_feature_vector(all).csv').drop(['fontname'], axis=1)
+bbichim_df = pd.read_csv('형태소별 특징벡터/bbichim_feature_vector(all).csv').drop(['fontname'], axis=1)
+buri_df = pd.read_csv('형태소별 특징벡터/buri_feature_vector(all).csv').drop(['fontname'], axis=1)
+kkeokim_df = pd.read_csv('형태소별 특징벡터/kkeokim_feature_vector(all).csv').drop(['fontname'], axis=1)
+kkokjijum_df = pd.read_csv('형태소별 특징벡터/kkokjijum_feature_vector(all).csv').drop(['fontname'], axis=1)
+sangtu_df = pd.read_csv('형태소별 특징벡터/sangtu_feature_vector(all).csv').drop(['fontname'], axis=1)
 
 
 # ##### 3. 입력이미지 형태소 특징벡터 추출
@@ -28,7 +28,7 @@ sangtu_df = pd.read_csv('형태소별 특징벡터(.csv)/sangtu_feature_vector(a
 img2vec =Img2Vec(model="inception")
 
 ### 테스트 폰트 경로
-input_path = './유사폰트추천 테스트용 형태소 이미지/'
+input_path = './폰트 검색 테스트용 형태소 이미지/'
 
 list_pics = []
 filenames = []
@@ -108,6 +108,9 @@ kkeokim_similarity_df = []
 kkokjijum_similarity_df = []
 sangtu_similarity_df = []
 
+# 입력 형태소와 비교하기 위해 기존 폰트(420)의 특징벡터를 저장할 DataFrame
+# 입력 형태소가 삐침, 상투면 해당 df에도 기존 폰트의 삐침, 상투만 저장하여 비교함
+comparative_font_df = pd.DataFrame()
 
 # #### ① 삐침
 
@@ -137,6 +140,9 @@ if 'bbichim.png' in filenames:
   bbichim_similarity_df = same_cluster_input.iloc[:-1, :-1]
   bbichim_similarity_df['similarity'] = bbichim_similarity
   bbichim_similarity_df.sort_values(by='similarity', ascending=False)
+  
+  # 입력 삐침 형태소와의 비교를 위해 기존 폰트의 삐침 형태소를 포함시킴
+  comparative_font_df = pd.concat([comparative_font_df, bbichim_df], axis=1)
 
 
 # #### ② 부리
@@ -163,6 +169,9 @@ if 'buri.png' in filenames:
   buri_similarity_df = same_buri_cluster_input.iloc[:-1, :-1]
   buri_similarity_df['similarity'] = buri_similarity
   buri_similarity_df.sort_values(by='similarity', ascending=False)
+  
+  # 입력 부리 형태소와의 비교를 위해 기존 폰트의 부리 형태소를 포함시킴
+  comparative_font_df = pd.concat([comparative_font_df, buri_df], axis=1)
 
 
 # #### ③ 꺾임
@@ -189,6 +198,9 @@ if 'kkeokim.png' in filenames:
   kkeokim_similarity_df = same_kkeokim_cluster_input.iloc[:-1, :-1]
   kkeokim_similarity_df['similarity'] = kkeokim_similarity
   kkeokim_similarity_df.sort_values(by='similarity', ascending=False)
+  
+  # 입력 꺾임 형태소와의 비교를 위해 기존 폰트의 꺾임 형태소를 포함시킴
+  comparative_font_df = pd.concat([comparative_font_df, kkeokim_df], axis=1)
 
 
 # #### ④ 꼭지점
@@ -215,6 +227,9 @@ if 'kkokjijum.png' in filenames:
   kkokjijum_similarity_df = same_kkokjijum_cluster_input.iloc[:-1, :-1]
   kkokjijum_similarity_df['similarity'] = kkokjijum_similarity
   kkokjijum_similarity_df.sort_values(by='similarity', ascending=False).iloc[:10]
+  
+  # 입력 꼭지점 형태소와의 비교를 위해 기존 폰트의 꼭지점 형태소를 포함시킴
+  comparative_font_df = pd.concat([comparative_font_df, kkokjijum_df], axis=1)
 
 
 # #### ⑤ 상투
@@ -241,61 +256,44 @@ if 'sangtu.png' in filenames:
   sangtu_similarity_df = same_sangtu_cluster_input.iloc[:-1, :-1]
   sangtu_similarity_df['similarity'] = sangtu_similarity
   sangtu_similarity_df.sort_values(by='similarity', ascending=False)
+  
+  # 입력 상투 형태소와의 비교를 위해 기존 폰트의 상투 형태소를 포함시킴
+  comparative_font_df = pd.concat([comparative_font_df, sangtu_df], axis=1)
 
 
 # ### 입력 형태소 이미지와 유사한 폰트 추천
 
 # #### ① 비교 후보 폰트 
 
+# # 입력 형태소와의 유사도 0.6 이상인 형태소의 폰트를 후보 폰트로 함
+bbichim_sim_high_df = bbichim_similarity_df[bbichim_similarity_df['similarity'] >= 0.6]
+buri_sim_high_df = buri_similarity_df[buri_similarity_df['similarity'] >= 0.6]
+kkeokim_sim_high_df = kkeokim_similarity_df[kkeokim_similarity_df['similarity'] >= 0.6]
+kkokjijum_sim_high_df = kkokjijum_similarity_df[kkokjijum_similarity_df['similarity'] >= 0.6]
+sangtu_sim_high_df = sangtu_similarity_df[sangtu_similarity_df['similarity'] >= 0.6]
+
 candidate_font = np.array([])
-if len(bbichim_similarity_df) > 0:
-  candidate_font = np.concatenate((candidate_font, bbichim_similarity_df['fontname'].values), axis=0)
-
-if len(buri_similarity_df) > 0:
-  candidate_font = np.concatenate((candidate_font, buri_similarity_df['fontname'].values), axis=0)
-
-if len(kkeokim_similarity_df) > 0:
-  candidate_font = np.concatenate((candidate_font, kkeokim_similarity_df['fontname'].values), axis=0)
-
-if len(kkokjijum_similarity_df) > 0:
-  candidate_font = np.concatenate((candidate_font, kkokjijum_similarity_df['fontname'].values), axis=0)
-
-if len(sangtu_similarity_df) > 0:
-  candidate_font = np.concatenate((candidate_font, sangtu_similarity_df['fontname'].values), axis=0)
+if len(bbichim_sim_high_df) > 0:   candidate_font = np.concatenate((candidate_font, bbichim_sim_high_df['fontname'].values), axis=0)
+if len(buri_sim_high_df) > 0:      candidate_font = np.concatenate((candidate_font, buri_sim_high_df['fontname'].values), axis=0)
+if len(kkeokim_sim_high_df) > 0:   candidate_font = np.concatenate((candidate_font, kkeokim_sim_high_df['fontname'].values), axis=0)
+if len(kkokjijum_sim_high_df) > 0: candidate_font = np.concatenate((candidate_font, kkokjijum_sim_high_df['fontname'].values), axis=0)
+if len(sangtu_sim_high_df) > 0:    candidate_font = np.concatenate((candidate_font, sangtu_sim_high_df['fontname'].values), axis=0)
 
 candidate_font = list(set(candidate_font))
 # print(len(candidate_font))
 
 
 # #### ② 코사인유사도로 폰트 비교
-
-all_df = pd.DataFrame()
-
-if 'bbichim.png' in filenames:
-  all_df = pd.concat([all_df, bbichim_df], axis=1)
-
-if 'buri.png' in filenames:
-  all_df = pd.concat([all_df, buri_df], axis=1)
-
-if 'kkeokim.png' in filenames:
-  all_df = pd.concat([all_df, kkeokim_df], axis=1)
-
-if 'kkokjijum.png' in filenames:
-  all_df = pd.concat([all_df, kkokjijum_df], axis=1)
-
-if 'sangtu.png' in filenames:
-  all_df = pd.concat([all_df, sangtu_df], axis=1)
-
-all_df = add_fontname(all_df)
-test_font_vec = all_df.iloc[[-1]].iloc[:, 1:]
+comparative_font_df = add_fontname(comparative_font_df)
+test_font_vec = comparative_font_df.iloc[[-1]].iloc[:, 1:]
 
 font_recommendation_list = []
 font_recommendation_sim = []
 
-for i in range(all_df.shape[0]):
-  if all_df.iloc[i]['fontname'] in candidate_font:
-    font_recommendation_list.append(all_df.iloc[i]['fontname'])
-    font_recommendation_sim.append(cosine_similarity(test_font_vec.values, all_df.iloc[[i]].iloc[:, 1:].values)[0][0])
+for i in range(comparative_font_df.shape[0]):
+  if comparative_font_df.iloc[i]['fontname'] in candidate_font:
+    font_recommendation_list.append(comparative_font_df.iloc[i]['fontname'])
+    font_recommendation_sim.append(cosine_similarity(test_font_vec.values, comparative_font_df.iloc[[i]].iloc[:, 1:].values)[0][0])
 
 # #### ③ 폰트 추천 결과
 font_recommendation = pd.DataFrame(font_recommendation_list)
