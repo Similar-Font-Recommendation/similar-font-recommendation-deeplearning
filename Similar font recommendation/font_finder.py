@@ -4,12 +4,16 @@
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 import shutil
+import sys
+sys.path.append("./img2vec_pytorch2")  # Adds higher directory to python modules path.
+from img_to_vec import Img2Vec
+from PIL import Image, ImageDraw, ImageFont, ImageChops
+import os
+import cv2
+img2vec =Img2Vec(model="inception")
 
 ### 2. 텍스트 렌더링
-from PIL import Image, ImageDraw, ImageFont
-import os
-
-def make_image(message, rendering_time, font_list, img_save_path):
+def make_image(message, font_list, img_save_path):
 
   # font setting
   font_color = 'rgb(0, 0, 0)'
@@ -23,7 +27,7 @@ def make_image(message, rendering_time, font_list, img_save_path):
   y_margin = 5
   
   # 렌더링 결과 파일 저장할 폴더 생성
-  img_save_path = img_save_path + message + '(' + str(rendering_time) + ')/'
+  img_save_path = img_save_path + message + '/'
   os.mkdir(img_save_path)
   
   for font in font_list:
@@ -38,6 +42,20 @@ def make_image(message, rendering_time, font_list, img_save_path):
   
   return img_save_path
 
+#image resize
+def resize_img(path):
+    img = cv2.imread(path,cv2.IMREAD_GRAYSCALE)
+    h,w= img.shape
+    if h > 60:
+        ratio_h = h / 60
+        img_resize = cv2.resize(img, None, fx=ratio_h, fy=ratio_h, interpolation = cv2.INTER_CUBIC)
+    elif h < 60:
+        ratio_h =  60 / h
+        img_resize = cv2.resize(img, None, fx=ratio_h, fy=ratio_h, interpolation = cv2.INTER_CUBIC)
+    else:
+        img_resize = img
+    cv2.imwrite(path, img_resize)
+
 ### 2-1. 이미지 여백 제거
 def trim(img_path):
   img_path = img_path
@@ -45,57 +63,41 @@ def trim(img_path):
   
   for img_name in img_list:
     img = Image.open(img_path + img_name)
-    pixels = img.load()  
-    
-    xlist = []
-    ylist = []
-    for y in range(0, img.size[1]):
-      for x in range(0, img.size[0]):
-        if pixels[x, y] != (255, 255, 255):
-          xlist.append(x)
-          ylist.append(y)
-    left = min(xlist)
-    right = max(xlist)
-    top = min(ylist)
-    bottom = max(ylist)
-    
-    trimed_img = img.crop((left, top, right, bottom))
-    trimed_img.save(img_path + img_name)
-    
+    background = Image.new(img.mode, img.size, img.getpixel((0, 0)))
+    diff = ImageChops.difference(img, background)
+    diff = ImageChops.add(diff, diff, 2.0, -35)
+    bbox = diff.getbbox()
+    if bbox:
+      img = img.crop(bbox)
+      img.save(img_path + img_name)
+      resize_img(img_path + img_name)
+    else:
+      print('Trim Failure!')
+      return
     
 ### 3. input 이미지 특징벡터 추출
-import sys
-sys.path.append("../_석사코드정리_학제간연구용/3. 유사폰트추천코드/img2vec/img2vec_pytorch")  # Adds higher directory to python modules path.
-from img_to_vec import Img2Vec
-
-img2vec =Img2Vec(model="inception")
-
-test_img_input_path = '/home/sblim/FontProject/FontSearching/input_img/test.png'
-test_filename = os.fsdecode(test_img_input_path)
-test_img = Image.open(os.path.join(test_img_input_path, test_filename)).convert('RGB')
+input_img_path = "/FontSearching/input_img/"
+input_img = 'test.jpg'
+test_img = Image.open(os.path.join(input_img_path, input_img)).convert('RGB')
+resize_img(input_img_path + input_img)
 test_img_vector = img2vec.get_vec(test_img)
-    
 test_img_vector_df = pd.DataFrame(test_img_vector).transpose()
-print("1. input 이미지 특징벡터 추출 완료")
-
 
 ### 4. 유사도 비교
 #### 4-1. 보유 폰트로 텍스트 렌더링
 font_list = os.listdir('./ttf_font(430)')
 font_list = sorted(font_list)
-msg = "훈민정음"
-rendering_time = "all"
-img_save_path = "./rendering_result/"
-trim_img_path = make_image(msg, rendering_time, font_list, img_save_path)
-
+msg = "물고기"
+img_save_path = "/FontSearching/rendering_result/"
+trim_img_path = make_image(msg, font_list, img_save_path)
 trim(trim_img_path)
-print("2. 텍스트 렌더링 완료")
+
 
 #### 4-2. 렌더링 이미지의 특징벡터 추출
-input_path = './rendering_result/' + msg + '(all)/'
+input_path = trim_img_path
 list_pics1 = []
 filenames1 = []
-for file1 in os.listdir(input_path):
+for file1 in sorted(os.listdir(input_path)):
     filename1 = os.fsdecode(file1)
     img1 = Image.open(os.path.join(input_path, filename1)).convert('RGB')
     list_pics1.append(img1)
@@ -105,8 +107,6 @@ vectors1 = img2vec.get_vec(list_pics1)
 pics1 = {}
 for i1, vec1 in enumerate(vectors1):
     pics1[filenames1[i1]] = vec1
-
-print("3. 렌더링 이미지의 특징벡터 추출 완료")
     
 rendering_vector_df = pd.DataFrame(pics1).transpose()
 rendering_vector_df = rendering_vector_df.sort_index(ascending=True)
@@ -128,11 +128,11 @@ most_sim_font_1st = rendering_vector_sim_df.iloc[[rendering_vector_df['similarit
 
 ### 추천 폰트 순위
 font_search_rank = rendering_vector_sim_df[['fontname', 'similarity']].sort_values(by=['similarity'],ascending=False)
+print(font_search_rank.iloc[0:10])
 
 ### 추천 폰트 순위 상위 10개
-print("4. 폰트 검색 결과")
-print(font_search_rank['fontname'].iloc[0:10].tolist())
-# index 기준 출력 : print(font_search_rank.iloc[0:10].index.tolist())
+font_search_rank = font_search_rank['fontname'].iloc[0:10].tolist()
+print(font_search_rank)
 
 font_rendering_dir = input_path
 if os.path.exists(font_rendering_dir):
